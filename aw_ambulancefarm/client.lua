@@ -1,6 +1,6 @@
 QBCore = exports['qb-core']:GetCoreObject()
 
-local medicPedCoords = vector3(308.15, -1434.89, 29.87)
+local medicPedCoords = vector3(311.18, -1437.48, 29.97)
 local ambulanceCoords = vector4(294.1, -1439.0, 29.8, 234.11)
 local vehicleReturnCoords = vector3(295.84, -1440.25, 29.8) -- Point de rangement du véhicule
 local healingPed = nil
@@ -32,6 +32,16 @@ CreateThread(function()
     FreezeEntityPosition(medicPed, true)
     TaskStartScenarioInPlace(medicPed, "WORLD_HUMAN_CLIPBOARD", 0, true)
 end)
+
+-- Fonction pour obtenir la hauteur du sol
+function GetGroundZForCoord(x, y, z)
+    local retval, groundZ = GetGroundZFor_3dCoord(x, y, z)
+    if retval then
+        return groundZ
+    else
+        return z -- Si on n'a pas de hauteur valide, on garde la valeur donnée
+    end
+end
 
 -- Interaction avec le médecin
 CreateThread(function()
@@ -94,12 +104,15 @@ function ReturnVehicle()
     local vehicle = GetVehiclePedIsIn(playerPed, false)
     if DoesEntityExist(vehicle) then
         DeleteEntity(vehicle)
-        QBCore.Functions.Notify("Véhicule rangé avec succès.", "success")
+        -- Appel à l'événement pour donner l'argent au joueur
+        TriggerServerEvent('rewardPlayer', pedsHealed)
+        QBCore.Functions.Notify("Véhicule rangé avec succès. Vous avez gagné de l'argent.", "success")
         EndMission()
     else
         QBCore.Functions.Notify("Vous n'êtes pas dans un véhicule.", "error")
     end
 end
+
 
 function EndMission()
     if missionInProgress then
@@ -108,10 +121,7 @@ function EndMission()
         local distanceToReturn = #(playerCoords - vehicleReturnCoords)
 
         if distanceToReturn < 5.0 then
-            QBCore.Functions.Notify("Mission terminée. Retournez voir le médecin pour recevoir votre récompense.")
             missionInProgress = false
-            TriggerServerEvent('rewardPlayer', pedsHealed) -- Envoie le nombre de PNJ soignés au serveur
-            pedsHealed = 0
             if healingPed then
                 DeleteEntity(healingPed)
                 healingPed = nil
@@ -139,7 +149,9 @@ function SpawnNextHealingScenario()
         Wait(10)
     end
 
-    healingPed = CreatePed(4, model, scenario.coords.x, scenario.coords.y, scenario.coords.z - 1.0, 0.0, false, true) -- Spawn au sol
+    -- Utilisation de la fonction pour obtenir la hauteur du sol
+    local groundZ = GetGroundZForCoord(scenario.coords.x, scenario.coords.y, scenario.coords.z)
+    healingPed = CreatePed(4, model, scenario.coords.x, scenario.coords.y, groundZ, 0.0, false, true) -- Placement direct sur le sol
     FreezeEntityPosition(healingPed, true)
 
     -- Différentes animations en fonction du scénario

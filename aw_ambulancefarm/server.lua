@@ -1,12 +1,12 @@
-QBCore = exports['qb-core']:GetCoreObject()
-
 RegisterNetEvent('rewardPlayer')
 AddEventHandler('rewardPlayer', function(pedsHealed)
-    local src = source
-    local Player = QBCore.Functions.GetPlayer(src)
-    if Player then
-        local reward = pedsHealed * 10 -- 10 par personne soignée
-        Player.Functions.AddMoney('cash', reward)
-        TriggerClientEvent('QBCore:Notify', src, "Merci pour votre aide ! Voici votre récompense : $" .. reward .. ".", "success")
+    local player = source
+    local rewardAmount = pedsHealed * 100 -- 100$ par patient soigné
+
+    -- Ajout de l'argent au joueur
+    local xPlayer = QBCore.Functions.GetPlayer(player)
+    if xPlayer then
+        xPlayer.Functions.AddMoney('cash', rewardAmount)
+        TriggerClientEvent('QBCore:Notify', player, "Vous avez reçu " .. rewardAmount .. "$ pour avoir soigné " .. pedsHealed .. " patients.")
     end
 end)
