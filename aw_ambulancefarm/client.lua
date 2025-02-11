@@ -2,16 +2,21 @@ QBCore = exports['qb-core']:GetCoreObject()
 
 local medicPedCoords = vector3(308.15, -1434.89, 29.87)
 local ambulanceCoords = vector4(294.1, -1439.0, 29.8, 234.11)
+local vehicleReturnCoords = vector3(295.84, -1440.25, 29.8) -- Point de rangement du véhicule
 local healingPed = nil
 local currentBlip = nil
 local pedsHealed = 0
 local missionInProgress = false
+local vehicleSpawned = false
 local scenarios = {
     {coords = vector3(245.5, -1400.8, 30.5), scenario = "car_accident"},
     {coords = vector3(305.3, -1312.5, 30.3), scenario = "street_fight"},
     {coords = vector3(327.6, -1204.7, 30.2), scenario = "slip_and_fall"},
     {coords = vector3(410.1, -1110.5, 29.8), scenario = "overdose"},
-    {coords = vector3(455.9, -1022.3, 28.9), scenario = "construction_accident"}
+    {coords = vector3(455.9, -1022.3, 28.9), scenario = "construction_accident"},
+    {coords = vector3(500.0, -1500.0, 30.0), scenario = "car_accident"},
+    {coords = vector3(600.0, -1400.0, 30.0), scenario = "street_fight"},
+    {coords = vector3(700.0, -1300.0, 30.0), scenario = "slip_and_fall"},
 }
 
 -- Crée le PNJ médecin
@@ -40,10 +45,19 @@ CreateThread(function()
             QBCore.Functions.DrawText3D(medicPedCoords.x, medicPedCoords.y, medicPedCoords.z, "[E] Parler au Médecin")
             if IsControlJustPressed(0, 38) then
                 if missionInProgress then
-                    QBCore.Functions.Notify("Médecin : Terminez votre mission actuelle.")
+                    EndMission()
                 else
                     StartMissionDialogue()
                 end
+            end
+        end
+
+        -- Vérification de la proximité du point de rangement du véhicule
+        local returnDistance = #(playerCoords - vehicleReturnCoords)
+        if returnDistance < 5.0 and vehicleSpawned then
+            QBCore.Functions.DrawText3D(vehicleReturnCoords.x, vehicleReturnCoords.y, vehicleReturnCoords.z + 1.0, "[E] Ranger le véhicule")
+            if IsControlJustPressed(0, 38) then
+                ReturnVehicle()
             end
         end
     end
@@ -51,6 +65,7 @@ end)
 
 function StartMissionDialogue()
     missionInProgress = true
+    vehicleSpawned = false
     QBCore.Functions.Notify("Médecin : Voici une ambulance, allez sauver des vies !", "primary")
     SpawnAmbulance()
     SpawnNextHealingScenario()
@@ -71,14 +86,49 @@ function SpawnAmbulance()
     SetVehicleDoorsLocked(vehicle, 1)
     SetVehicleDoorsLockedForAllPlayers(vehicle, false)
     TriggerEvent('vehiclekeys:client:SetOwner', GetVehicleNumberPlateText(vehicle))
+    vehicleSpawned = true
+end
+
+function ReturnVehicle()
+    local playerPed = PlayerPedId()
+    local vehicle = GetVehiclePedIsIn(playerPed, false)
+    if DoesEntityExist(vehicle) then
+        DeleteEntity(vehicle)
+        QBCore.Functions.Notify("Véhicule rangé avec succès.", "success")
+        EndMission()
+    else
+        QBCore.Functions.Notify("Vous n'êtes pas dans un véhicule.", "error")
+    end
+end
+
+function EndMission()
+    if missionInProgress then
+        local playerPed = PlayerPedId()
+        local playerCoords = GetEntityCoords(playerPed)
+        local distanceToReturn = #(playerCoords - vehicleReturnCoords)
+
+        if distanceToReturn < 5.0 then
+            QBCore.Functions.Notify("Mission terminée. Retournez voir le médecin pour recevoir votre récompense.")
+            missionInProgress = false
+            TriggerServerEvent('rewardPlayer', pedsHealed) -- Envoie le nombre de PNJ soignés au serveur
+            pedsHealed = 0
+            if healingPed then
+                DeleteEntity(healingPed)
+                healingPed = nil
+            end
+            if currentBlip then
+                RemoveBlip(currentBlip)
+                currentBlip = nil
+            end
+        else
+            QBCore.Functions.Notify("Vous devez ranger le véhicule avant de terminer la mission.", "error")
+        end
+    end
 end
 
 function SpawnNextHealingScenario()
     if pedsHealed >= #scenarios then
-        QBCore.Functions.Notify("Retournez voir le médecin pour recevoir votre récompense.")
-        missionInProgress = false
-        TriggerServerEvent('rewardPlayer', pedsHealed) -- Envoie le nombre de PNJ soignés au serveur
-        pedsHealed = 0
+        EndMission()
         return
     end
 
